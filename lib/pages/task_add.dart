@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:todo_bloc/bloc/todo_bloc.dart';
+import 'package:todo_bloc/bloc/todo_event.dart';
+import 'package:todo_bloc/bloc/todo_state.dart';
+import 'package:todo_bloc/data/todo_database.dart';
+import 'package:todo_bloc/models/todo_model.dart';
+import 'package:uuid/uuid.dart';
 
 class TaskAdd extends StatefulWidget {
   const TaskAdd({super.key});
@@ -17,6 +24,7 @@ class _TaskAddState extends State<TaskAdd> {
   FocusNode focusNode2 = FocusNode();
   late DateTime selectedDate;
   late DateTime focusedDate;
+
   @override
   void initState() {
     selectedDate = DateTime.now();
@@ -24,60 +32,79 @@ class _TaskAddState extends State<TaskAdd> {
     super.initState();
   }
 
-  void addsuccess() {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        title: Text('Adding Task'),
-        content: Text('Please wait...'),
-      );
-    },
-  );
+  void addTask() {
+  try {
+    final taskTitle = taskController.text.trim();
+    final taskDetails = detailsController.text.trim();
 
-  Future.delayed(Duration(seconds: 3), () {
-    Navigator.of(context).pop();
-    showDialog(
-      // ignore: use_build_context_synchronously
-      context: (context),
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Success'),
-          content: Text('Task Added Successfully'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                context.go('/home');
-              },
-              child: Text('OK'),
-            ),
-          ],
-        );
-      },
+    if (taskTitle.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task Title Cannot be empty')),
+      );
+      return;
+    }
+
+    var uuid = Uuid();
+    final newTodo = TodoModel(
+      id: uuid.v4(),
+      title: taskTitle,
+      details: taskDetails,
+      isCompleted: false,
+      time: selectedDate,
     );
-  });
+
+    context.read<TodoBloc>().add(AddTodo(newTodo));
+    debugPrint("Task Added: ${newTodo.title}, ${newTodo.details}");
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Error'),
+        content: Text('Task Added SuccessFully'), // ✅ Show actual error message
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  } catch (e, stacktrace) {
+    debugPrint("Error Adding Task: $e");
+    debugPrint("Stacktrace: $stacktrace");
+
+     showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Error'),
+        content: Text('Failed to add task: $e'), // ✅ Show actual error message
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 
-  Future<void> selectDate() async{
+  Future<void> selectDate() async {
     showDialog(
       context: context,
-      builder: (BuildContext context){
+      builder: (BuildContext context) {
         return Dialog(
           child: SizedBox(
             height: 480,
-                width: 400,
+            width: 400,
             child: Column(
               children: [
                 TableCalendar(
-                  focusedDay: focusedDate, 
-                  firstDay: DateTime.utc(2020,1,1), 
-                  lastDay: DateTime.utc(2025,12,31),
-                  selectedDayPredicate: (day) {
-                    return isSameDay(selectedDate, day);
-                  },
-                  onDaySelected: (selectedDay, focusedDay){
+                  focusedDay: focusedDate,
+                  firstDay: DateTime.utc(2020, 1, 1),
+                  lastDay: DateTime.utc(2025, 12, 31),
+                  selectedDayPredicate: (day) => isSameDay(selectedDate, day),
+                  onDaySelected: (selectedDay, focusedDay) {
                     setState(() {
                       selectedDate = selectedDay;
                       focusedDate = focusedDay;
@@ -85,27 +112,25 @@ class _TaskAddState extends State<TaskAdd> {
                   },
                 ),
                 GestureDetector(
-                  onTap: (){
-                    Navigator.pop(context);
-                  },
-                  child: Expanded(
-                    child: Container(
-                      margin: EdgeInsets.symmetric(horizontal: 20, vertical:15),
-                      alignment: Alignment.center,
-                      height: 45,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey,
-                        borderRadius: BorderRadius.circular(15)
-                      ),
-                      child: Text('Select'),
-                    )),
-                )
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                    alignment: Alignment.center,
+                    height: 45,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.grey,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: const Text('Select'),
+                  ),
+                ),
               ],
             ),
           ),
         );
-      });
+      },
+    );
   }
 
   @override
@@ -115,136 +140,154 @@ class _TaskAddState extends State<TaskAdd> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-           context.go('/home');
+            context.go('/home');
           },
         ),
       ),
       body: GestureDetector(
-        onTap: (){
-              setState(() {
-                focusNode1.unfocus();
-                focusNode2.unfocus();
-              });
-            },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 30,),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Add Tasks',
-              style: GoogleFonts.dmSerifText(
-                fontSize: 40,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey.shade600
-              ),),
-              SizedBox(height: 10,),
-              TextField(
-              focusNode: focusNode1,
-              controller: taskController,
-              autocorrect: false,
-              decoration: InputDecoration(
-                border:OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(15)
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey.shade500),
-                  borderRadius: BorderRadius.circular(15)
-        
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(15),
-                  borderSide: BorderSide(color: Colors.black)
-                ),
-                contentPadding: const EdgeInsets.only(left: 10),
-                hintText: 'Task.....',
-                hintStyle: GoogleFonts.dmSerifText(
-                  color: Colors.grey.shade500,
-                  fontSize: 15
-                ),
-                suffixIcon: IconButton(
-                  onPressed: (){
-                    setState(() {
-                      taskController.clear();
-                    });
-                  }, 
-                  icon: Icon(Icons.clear,size: 20,color: Colors.grey,))
-              ),
-            ),
-              SizedBox(height: 20,),
-              TextField(
-                focusNode: focusNode2,
-                controller: detailsController,
-                maxLines: 6,
-                decoration: InputDecoration(
-                  border:OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15)
+        onTap: () {
+          focusNode1.unfocus();
+          focusNode2.unfocus();
+        },
+        child: SingleChildScrollView( // ✅ Prevents RenderFlex issue
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 30),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Add Tasks',
+                  style: GoogleFonts.dmSerifText(
+                    fontSize: 40,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade600,
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.grey.shade500),
-                    borderRadius: BorderRadius.circular(15)
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(15),
-                    borderSide: BorderSide(color: Colors.black)
-                  ),
-                  contentPadding: const EdgeInsets.only(left: 20,top: 20,right: 20,bottom: 20),
-                  hintText: 'Details.....',
-                  hintStyle: GoogleFonts.dmSerifText(
-                    color: Colors.grey.shade500,
-                    fontSize: 15
-                  ),
-                  suffixIcon: IconButton(
-                    onPressed: (){
-                      setState(() {
-                        detailsController.clear();
-                      });
-                    }, 
-                    icon: Icon(Icons.clear,size: 20,color: Colors.grey,))
                 ),
-              ),
-              SizedBox(height: 20,),
-              GestureDetector(
-                onTap: selectDate,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.grey.shade500),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.calendar_today),
-                      SizedBox(width: 10,),
-                      Text('Select Date',
-                      style: GoogleFonts.dmSerifText(
-                        fontSize: 20,
-                        color: Colors.grey.shade600
-                      ),
+                const SizedBox(height: 10),
+                TextField(
+                  focusNode: focusNode1,
+                  controller: taskController,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(15),
                     ),
-                    ],
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.grey.shade500),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    focusedBorder: const OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.black),
+                    ),
+                    hintText: 'Task.....',
+                    hintStyle: GoogleFonts.dmSerifText(fontSize: 15, color: Colors.grey.shade500),
+                    suffixIcon: IconButton(
+                      onPressed: taskController.clear, // ✅ No need for setState()
+                      icon: const Icon(Icons.clear, size: 20, color: Colors.grey),
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(height: 20,),
-              Container(
-                margin: EdgeInsets.symmetric(horizontal: 20, vertical:15),
-                alignment: Alignment.center,
-                height: 45,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.lightGreen,
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: Colors.grey)
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () async {
+                    await TodoDatabase.instance.deleteDatabase();
+                    print('Database deleted successfully!');
+                  },
+                  child: Text('Reset Database'),
                 ),
-                child: GestureDetector(
-                  onTap: addsuccess,
-                  child: Text('Add Task',
-                  style: GoogleFonts.dmSerifText(fontSize: 20),)),
-              ),
-            ],
+
+                TextField(
+                  focusNode: focusNode2,
+                  controller: detailsController,
+                  maxLines: 6,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.grey.shade500),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    focusedBorder: const OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.black),
+                    ),
+                    hintText: 'Details.....',
+                    hintStyle: GoogleFonts.dmSerifText(fontSize: 15, color: Colors.grey.shade500),
+                    suffixIcon: IconButton(
+                      onPressed: detailsController.clear, // ✅ No need for setState()
+                      icon: const Icon(Icons.clear, size: 20, color: Colors.grey),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                GestureDetector(
+                  onTap: selectDate,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: Colors.grey.shade500),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Select Date',
+                          style: GoogleFonts.dmSerifText(fontSize: 20, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                GestureDetector(
+                  onTap: addTask,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                    alignment: Alignment.center,
+                    height: 45,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.lightGreen,
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: Colors.grey),
+                    ),
+                    child: Text(
+                      'Add Task',
+                      style: GoogleFonts.dmSerifText(fontSize: 20),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-      );
+      bottomNavigationBar: BlocListener<TodoBloc, TodoState>(
+        listener: (context, state) {
+          if (state is TodoLoaded) {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+            context.go('/home');
+          } else if (state is TodoError) {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text('Error'), 
+                content: Text('Failed to add task.'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context), 
+                    child: const Text('OK'),
+                  ),
+              ],
+              ),
+            );
+          }
+        },
+        child: const SizedBox.shrink(),
+      ),
+    );
   }
 }
